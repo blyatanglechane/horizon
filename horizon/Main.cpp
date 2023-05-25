@@ -1,9 +1,16 @@
 #include <iostream>
+#include <vector>
 #include <GLFW/glfw3.h>
 #include <random>
 #include <conio.h>
 
 using namespace std;
+
+struct Point
+{
+    double x;
+    double y;
+};
 
 float randomFloat()
 {
@@ -13,38 +20,66 @@ float randomFloat()
     return dis(gen);
 }
 
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
 {
-    float scaleFactor = 1.0f - yoffset * 0.1f;
-    glScalef(scaleFactor, scaleFactor, scaleFactor);
+    static double lastX = xpos, lastY = ypos;
+    static bool isDragging = false;
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
+    {
+        if (!isDragging)
+        {
+            isDragging = true;
+            lastX = xpos;
+            lastY = ypos;
+        }
+        else
+        {
+            float deltaX = (float)(xpos - lastX) / 600.0f;
+            float deltaY = (float)(ypos - lastY) / 600.0f;
+            glTranslatef(deltaX, -deltaY, 0.0f);
+            lastX = xpos;
+            lastY = ypos;
+        }
+    }
+    else
+    {
+        isDragging = false;
+    }
 }
 
-void AlgorithmMidpointDisplacement(double y_1, double y_2, double x_1, double x_2, int deep)
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    double scaleFactor = 1.1;
+    if (yoffset > 0)
+    {
+        glScalef(scaleFactor, scaleFactor, 1.0);
+    }
+    else
+    {
+        glScalef(1.0 / scaleFactor, 1.0 / scaleFactor, 1.0);
+    }
+}
+
+void AlgorithmMidpointDisplacement(double x_1, double y_1, double x_2, double y_2, int deep, double roughness, vector<Point>& points)
 {
     if (deep == 0)
     {
-        glBegin(GL_LINES);
-        glColor3f(0.0f, 0.0f, 0.0f);
-        glVertex2f(x_1, y_1);
-        glVertex2f(x_2, y_2);
-        glEnd();
+        points.push_back({ x_1, y_1 });
+        points.push_back({ x_2, y_2 });
     }
-    else 
+    else
     {
         double midX = (x_1 + x_2) / 2;
         double midY = (y_1 + y_2) / 2;
-        // найдём центр и придумаем ему рандомную высоту после этого уйдём в рекурсию передав левую точку и центральную
-        double roughness = 0.6;
+        // Find the center and assign a random height to it, then recursively call the function with the left point and center
 
         double res = midY + roughness * abs(x_1 - x_2) * randomFloat();
-        // левая часть
-        AlgorithmMidpointDisplacement(y_1, res, x_1, midX, deep - 1);
-        // Правая часть
-        AlgorithmMidpointDisplacement(res, y_2, midX, x_2, deep - 1);
-        // 0 0 13
+        // Left part
+        AlgorithmMidpointDisplacement(x_1, y_1, midX, res, deep - 1, roughness, points);
+        // Right part
+        AlgorithmMidpointDisplacement(midX, res, x_2, y_2, deep - 1, roughness, points);
     }
 }
-
 
 int main()
 {
@@ -61,33 +96,36 @@ int main()
 
     cout << "Координаты y для левой и правой точки\n"
         << "затем значение - глубина\n";
-    cout << "cin >> y_1 >> y_2 >> deep;\n";
-
-    double y_1, y_2, deep;
-    cin >> y_1 >> y_2 >> deep;
-
+    cout << "cin >> x_1 >> y_1 >> x_2 >> y_2 >> deep >> roughness;\n";
+    glfwSetCursorPosCallback(window, cursor_position_callback);
+    double x_1, y_1, x_2, y_2, deep, roughness;
+    cin >> x_1 >> y_1 >> x_2 >> y_2 >> deep >> roughness;
     glfwMakeContextCurrent(window);
-    bool flag = true;
-    glViewport(0, 0, 900, 900);
     glClearColor(0.0f, 0.0f, 0.8f, 1.0f);
 
-    /* Loop until the user closes the window */
+    // Register the scroll callback function
+    glfwSetScrollCallback(window, scroll_callback);
+
+    vector<Point> points;
+    AlgorithmMidpointDisplacement(x_1, y_1, x_2, y_2, deep, roughness, points);
+
     while (!glfwWindowShouldClose(window))
     {
-        /* Render here */
         glClear(GL_COLOR_BUFFER_BIT);
-
-        // Эта функция меняет местами передний и задний буфер
-        AlgorithmMidpointDisplacement(y_1, y_2, -1, 1, deep);
-        glfwSetScrollCallback(window, scroll_callback);
+        glBegin(GL_LINES);
+        glColor3f(0.0f, 0.0f, 0.0f);
+        for (const auto& point : points)
+        {
+            glVertex2f(point.x, point.y);
+        }
+        glEnd();
         glfwSwapBuffers(window);
-
-        // обрабатывает все события, произошедшие в окне - перемещение мыши или нажатие клавиш
-        //cout << "Нажмите любую клавишу, чтобы сгенерировать новый горизонт\n";
-        //_getch();
-
+        glfwSetScrollCallback(window, scroll_callback);
+        glfwSetCursorPosCallback(window, cursor_position_callback);
         glfwPollEvents();
     }
     glfwTerminate();
-	return 0;
+    return 0;
 }
+
+// -1 0 1 0 10 0.6
